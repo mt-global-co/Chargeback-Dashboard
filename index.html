@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MT Global Chargeback Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{--bg:#ffffff;--bg2:#f5f5f3;--bg3:#eeede8;--text:#1a1a18;--text2:#5f5e5a;--text3:#888780;--border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);--blue50:#E6F1FB;--blue400:#378ADD;--blue800:#0C447C;--teal50:#E1F5EE;--teal400:#1D9E75;--teal800:#085041;--red50:#FCEBEB;--red400:#E24B4A;--red800:#791F1F;--amber50:#FAEEDA;--amber400:#BA7517;--amber800:#633806;--purple50:#EEEDFE;--purple400:#7F77DD;--purple800:#3C3489;--radius:8px;--radius-lg:12px}
+@media(prefers-color-scheme:dark){:root{--bg:#1e1e1c;--bg2:#2a2a28;--bg3:#333330;--text:#f0ede8;--text2:#b4b2a9;--text3:#73726c;--border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.22);--blue400:#85B7EB;--teal400:#5DCAA5;--red400:#F09595;--amber400:#EF9F27;--purple400:#AFA9EC}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+.app{max-width:1200px;margin:0 auto;padding:24px 20px}
+.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:16px}
+.header h1{font-size:20px;font-weight:500}
+.header p{font-size:13px;color:var(--text2);margin-top:3px}
+.refresh-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);cursor:pointer;font-size:13px;white-space:nowrap}
+.refresh-btn:hover{background:var(--bg2)}
+.refresh-btn.loading svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tabs{display:flex;gap:4px;margin-bottom:22px;border-bottom:0.5px solid var(--border)}
+.tab{padding:9px 16px;border:0;border-bottom:2px solid transparent;background:none;color:var(--text2);cursor:pointer;font-size:14px;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--blue400);font-weight:500}
+.last-updated{font-size:11px;color:var(--text3);margin-left:auto;align-self:center}
+.section{margin-bottom:32px}
+.section-title{font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:18px}
+.metric{background:var(--bg2);border-radius:var(--radius);padding:14px 16px}
+.metric-label{font-size:12px;color:var(--text2);margin-bottom:4px}
+.metric-value{font-size:22px;font-weight:500}
+.metric-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.good{color:var(--teal400)}.warn{color:var(--amber400)}.bad{color:var(--red400)}.info{color:var(--blue400)}
+.highlights{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+.highlight-card{border-radius:var(--radius-lg);padding:16px 18px;border:0.5px solid var(--border);background:var(--bg)}
+.hl-icon{font-size:18px;margin-bottom:8px}
+.hl-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:4px}
+.hl-name{font-size:20px;font-weight:500;margin-bottom:2px}
+.hl-stat{font-size:12px;color:var(--text2)}
+.hl-won{border-color:#1D9E75;background:#E1F5EE}.hl-won .hl-label,.hl-won .hl-name{color:#085041}
+.hl-lost{border-color:#E24B4A;background:#FCEBEB}.hl-lost .hl-label,.hl-lost .hl-name{color:#791F1F}
+.hl-review{border-color:#BA7517;background:#FAEEDA}.hl-review .hl-label,.hl-review .hl-name{color:#633806}
+.hl-amount{border-color:#378ADD;background:#E6F1FB}.hl-amount .hl-label,.hl-amount .hl-name{color:#0C447C}
+@media(prefers-color-scheme:dark){
+  .hl-won{background:#04342C;border-color:var(--teal400)}.hl-won .hl-label,.hl-won .hl-name{color:#9FE1CB}
+  .hl-lost{background:#3A1414;border-color:var(--red400)}.hl-lost .hl-label,.hl-lost .hl-name{color:#F09595}
+  .hl-review{background:#412402;border-color:var(--amber400)}.hl-review .hl-label,.hl-review .hl-name{color:#FAC775}
+  .hl-amount{background:#042C53;border-color:var(--blue400)}.hl-amount .hl-label,.hl-amount .hl-name{color:#B5D4F4}
+}
+.card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:10px 14px;text-align:left;font-weight:500;font-size:12px;color:var(--text2);border-bottom:0.5px solid var(--border);background:var(--bg2);white-space:nowrap}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--text)}
+th .arrow{font-size:9px;opacity:0.6;margin-left:3px}
+td{padding:10px 14px;border-bottom:0.5px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg2)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500;border:0.5px solid transparent;white-space:nowrap}
+.status-pill .dot{width:7px;height:7px;border-radius:50%}
+.st-won{background:#E1F5EE;color:#085041;border-color:#1D9E7544}.st-won .dot{background:#1D9E75}
+.st-lost{background:#FCEBEB;color:#791F1F;border-color:#E24B4A44}.st-lost .dot{background:#E24B4A}
+.st-review{background:#FAEEDA;color:#633806;border-color:#BA751744}.st-review .dot{background:#BA7517}
+.st-other{background:var(--bg3);color:var(--text2)}.st-other .dot{background:var(--text3)}
+@media(prefers-color-scheme:dark){
+  .st-won{background:#04342C;color:#9FE1CB}.st-lost{background:#3A1414;color:#F09595}.st-review{background:#412402;color:#FAC775}
+}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+.chart-wrap{padding:16px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12px;color:var(--text2)}
+.ldot{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:4px}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.search-input{padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;min-width:200px}
+.filter-select{padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer}
+.filter-label{font-size:12px;color:var(--text2)}
+.row-count{font-size:12px;color:var(--text3);margin-left:auto}
+.loading-state,.empty-state{padding:48px 20px;text-align:center;color:var(--text3);font-size:13px}
+.spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--blue400);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px}
+.error-banner{background:var(--red50);border:0.5px solid var(--red400);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--red800)}
+.winbar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--bg3);margin:6px 0 4px}
+.winbar span{display:block;height:100%}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <div>
+    <h1>MT Global Chargeback Dashboard</h1>
+    <p id="period-label">Loading data from Google Sheets…</p>
+  </div>
+  <button class="refresh-btn" id="refresh-btn" onclick="fetchAll()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    Refresh data
+  </button>
+</div>
+
+<div class="tabs" id="tabs" style="display:none">
+  <button class="tab active" data-tab="overview" onclick="setTab('overview')">Overview</button>
+  <button class="tab" data-tab="details" onclick="setTab('details')">Chargeback Details</button>
+  <span class="last-updated" id="last-updated"></span>
+</div>
+
+<div id="content">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    Fetching live data from Google Sheets…
+  </div>
+</div>
+
+</div>
+
+<script>
+const SHEET_ID='1TuMaYXN1aJnW5Ms2ioHj1AqHOV7Uy8OGZ4TiP_CZgQE';
+const DATA_URL='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv';
+
+const C={won:'#1D9E75',lost:'#E24B4A',review:'#BA7517',other:'#888780'};
+
+let allRows=[],CHARTS={},activeTab='overview';
+let search='',statusFilter='All',reasonFilter='All',sortKey='order',sortDir='asc';
+
+async function fetchAll(){
+  const btn=document.getElementById('refresh-btn');
+  btn.classList.add('loading');
+  document.getElementById('content').innerHTML='<div class="loading-state"><div class="spinner"></div>Fetching live data from Google Sheets…</div>';
+  document.getElementById('tabs').style.display='none';
+  try{
+    const csv=await fetch(DATA_URL+'&t='+Date.now()).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();});
+    allRows=parseRows(csv);
+    document.getElementById('last-updated').textContent='Updated '+new Date().toLocaleTimeString();
+    document.getElementById('tabs').style.display='flex';
+    render();
+  }catch(e){
+    document.getElementById('content').innerHTML='<div class="error-banner">Could not load data. Make sure the Google Sheet is shared as “Anyone with the link can view”, then refresh.<br><small>'+e.message+'</small></div>';
+  }
+  btn.classList.remove('loading');
+}
+
+function splitCSV(l){
+  const r=[];let c='',q=false;
+  for(let i=0;i<l.length;i++){const ch=l[i];
+    if(ch==='"'){if(q&&l[i+1]==='"'){c+='"';i++;}else q=!q;}
+    else if(ch===','&&!q){r.push(c);c='';}
+    else c+=ch;
+  }
+  r.push(c);return r.map(x=>x.trim());
+}
+
+function classify(status){
+  const s=(status||'').toLowerCase();
+  if(s.includes('won'))return'won';
+  if(s.includes('lost'))return'lost';
+  if(s.includes('review'))return'review';
+  return'other';
+}
+
+function parseAmount(v){
+  if(!v)return 0;
+  return parseFloat(String(v).replace(/[€£$,\s]/g,''))||0;
+}
+
+function parseRows(csv){
+  const lines=csv.split(/\r?\n/).filter(l=>l.trim());
+  if(!lines.length)return[];
+  const hdrs=splitCSV(lines[0]).map(h=>h.toLowerCase());
+  const fi=name=>hdrs.findIndex(h=>h.includes(name));
+  const si=fi('status'),oi=fi('order'),ai=fi('chargeback'),ri=fi('reason'),ni=fi('note');
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    const v=splitCSV(lines[i]);
+    const status=si>=0?v[si]:'';
+    const order=oi>=0?v[oi]:'';
+    if(!status&&!order)continue;
+    const amtRaw=ai>=0?v[ai]:'';
+    rows.push({
+      status,order,
+      amount:parseAmount(amtRaw),
+      amountRaw:amtRaw||('€'+parseAmount(amtRaw).toFixed(2)),
+      reason:ri>=0?v[ri]:'',
+      notes:ni>=0?v[ni]:'',
+      cls:classify(status)
+    });
+  }
+  return rows;
+}
+
+const fmtE=n=>'€'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtE0=n=>'€'+Math.round(n).toLocaleString();
+
+function setTab(t){
+  activeTab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  render();
+}
+
+function render(){
+  Object.values(CHARTS).forEach(c=>{try{c.destroy();}catch(e){}});CHARTS={};
+  const total=allRows.length;
+  const won=allRows.filter(r=>r.cls==='won').length;
+  const lost=allRows.filter(r=>r.cls==='lost').length;
+  const review=allRows.filter(r=>r.cls==='review').length;
+  const resolved=won+lost;
+  document.getElementById('period-label').textContent=
+    total+' chargebacks · '+won+' won · '+lost+' lost · '+review+' in review';
+  const ct=document.getElementById('content');ct.innerHTML='';
+  if(!total){ct.innerHTML='<div class="empty-state">No chargeback rows found in the sheet.</div>';return;}
+  if(activeTab==='overview')renderOverview(ct,{total,won,lost,review,resolved});
+  else renderDetails(ct);
+}
+
+// ── Overview tab ───────────────────────────────────────────────────────────
+function renderOverview(ct,{total,won,lost,review,resolved}){
+  const winPct=resolved?won/resolved*100:0;
+  const lossPct=resolved?lost/resolved*100:0;
+  const totalAmt=allRows.reduce((s,r)=>s+r.amount,0);
+  const reviewAmt=allRows.filter(r=>r.cls==='review').reduce((s,r)=>s+r.amount,0);
+  const wonAmt=allRows.filter(r=>r.cls==='won').reduce((s,r)=>s+r.amount,0);
+  const lostAmt=allRows.filter(r=>r.cls==='lost').reduce((s,r)=>s+r.amount,0);
+
+  const sec=document.createElement('div');sec.className='section';
+  sec.innerHTML=`
+    <div class="highlights">
+      <div class="highlight-card hl-won"><div class="hl-icon">🏆</div><div class="hl-label">Win rate</div><div class="hl-name">${winPct.toFixed(1)}%</div><div class="hl-stat">${won} of ${resolved} resolved won</div></div>
+      <div class="highlight-card hl-lost"><div class="hl-icon">❌</div><div class="hl-label">Loss rate</div><div class="hl-name">${lossPct.toFixed(1)}%</div><div class="hl-stat">${lost} of ${resolved} resolved lost</div></div>
+      <div class="highlight-card hl-review"><div class="hl-icon">⏳</div><div class="hl-label">Still in review</div><div class="hl-name">${review}</div><div class="hl-stat">${fmtE0(reviewAmt)} at stake</div></div>
+      <div class="highlight-card hl-amount"><div class="hl-icon">💶</div><div class="hl-label">Total chargebacks</div><div class="hl-name">${total}</div><div class="hl-stat">${fmtE0(totalAmt)} total value</div></div>
+    </div>
+
+    <div class="section-title">Outcome breakdown</div>
+    <div class="metric-grid">
+      <div class="metric"><div class="metric-label">Total chargebacks</div><div class="metric-value">${total}</div></div>
+      <div class="metric"><div class="metric-label">Won</div><div class="metric-value good">${won}</div><div class="metric-sub">${fmtE0(wonAmt)} recovered</div></div>
+      <div class="metric"><div class="metric-label">Lost</div><div class="metric-value bad">${lost}</div><div class="metric-sub">${fmtE0(lostAmt)} lost</div></div>
+      <div class="metric"><div class="metric-label">In review</div><div class="metric-value warn">${review}</div><div class="metric-sub">${fmtE0(reviewAmt)} pending</div></div>
+      <div class="metric"><div class="metric-label">Total value</div><div class="metric-value info">${fmtE0(totalAmt)}</div></div>
+    </div>
+
+    <div class="card chart-wrap">
+      <div class="section-title" style="margin-bottom:6px">Won vs Lost (resolved cases only)</div>
+      <div class="winbar">
+        <span style="width:${winPct}%;background:${C.won}"></span>
+        <span style="width:${lossPct}%;background:${C.lost}"></span>
+      </div>
+      <div class="legend">
+        <span><span class="ldot" style="background:${C.won}"></span>Won ${winPct.toFixed(1)}% (${won})</span>
+        <span><span class="ldot" style="background:${C.lost}"></span>Lost ${lossPct.toFixed(1)}% (${lost})</span>
+        <span style="color:var(--text3)">${review} cases still in review are excluded from win/loss rate</span>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card chart-wrap">
+        <div class="section-title" style="margin-bottom:10px">Chargebacks by status</div>
+        <div style="position:relative;height:240px"><canvas id="statusChart"></canvas></div>
+      </div>
+      <div class="card chart-wrap">
+        <div class="section-title" style="margin-bottom:10px">Chargebacks by reason</div>
+        <div style="position:relative;height:240px"><canvas id="reasonChart"></canvas></div>
+      </div>
+    </div>`;
+  ct.appendChild(sec);
+
+  setTimeout(()=>{
+    const sc=document.getElementById('statusChart');
+    if(sc)CHARTS.status=new Chart(sc,{type:'doughnut',data:{labels:['Won','Lost','In review'],datasets:[{data:[won,lost,review],backgroundColor:[C.won+'cc',C.lost+'cc',C.review+'cc'],borderColor:[C.won,C.lost,C.review],borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{color:'#888780',font:{size:12},padding:14,usePointStyle:true}}}}});
+
+    const rm={};allRows.forEach(r=>{const k=r.reason||'Unknown';rm[k]=(rm[k]||0)+1;});
+    const re=Object.entries(rm).sort((a,b)=>b[1]-a[1]);
+    const rc=document.getElementById('reasonChart');
+    if(rc)CHARTS.reason=new Chart(rc,{type:'bar',data:{labels:re.map(r=>r[0]),datasets:[{data:re.map(r=>r[1]),backgroundColor:'#378ADD99',borderColor:'#378ADD',borderWidth:1.5,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#888780',font:{size:11},precision:0},grid:{color:'rgba(128,128,128,0.1)'}},y:{ticks:{color:'#888780',font:{size:11}},grid:{display:false}}}}});
+  },60);
+}
+
+// ── Details tab ────────────────────────────────────────────────────────────
+function statusPill(r){
+  const cls={won:'st-won',lost:'st-lost',review:'st-review',other:'st-other'}[r.cls];
+  return`<span class="status-pill ${cls}"><span class="dot"></span>${r.status||'—'}</span>`;
+}
+
+function renderDetails(ct){
+  const statuses=Array.from(new Set(allRows.map(r=>r.status).filter(Boolean)));
+  const reasons=Array.from(new Set(allRows.map(r=>r.reason).filter(Boolean)));
+
+  const sec=document.createElement('div');sec.className='section';
+  sec.innerHTML=`
+    <div class="toolbar">
+      <input class="search-input" id="search" type="text" placeholder="Search order # or reason…" value="${search.replace(/"/g,'&quot;')}">
+      <span class="filter-label">Status</span>
+      <select class="filter-select" id="statusFilter">
+        <option value="All">All</option>
+        ${statuses.map(s=>`<option value="${s}"${s===statusFilter?' selected':''}>${s}</option>`).join('')}
+      </select>
+      <span class="filter-label">Reason</span>
+      <select class="filter-select" id="reasonFilter">
+        <option value="All">All</option>
+        ${reasons.map(s=>`<option value="${s}"${s===reasonFilter?' selected':''}>${s}</option>`).join('')}
+      </select>
+      <span class="row-count" id="rowCount"></span>
+    </div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr>
+        <th class="sortable" data-key="status">Status${sortArrow('status')}</th>
+        <th class="sortable num" data-key="order">Order #${sortArrow('order')}</th>
+        <th class="sortable num" data-key="amount">Total Chargeback${sortArrow('amount')}</th>
+        <th class="sortable" data-key="reason">Reason for Chargeback${sortArrow('reason')}</th>
+      </tr></thead>
+      <tbody id="detailBody"></tbody>
+    </table></div></div>
+    <div class="metric-grid" id="filteredTotals"></div>`;
+  ct.appendChild(sec);
+
+  document.getElementById('search').addEventListener('input',e=>{search=e.target.value;updateTable();});
+  document.getElementById('statusFilter').addEventListener('change',e=>{statusFilter=e.target.value;updateTable();});
+  document.getElementById('reasonFilter').addEventListener('change',e=>{reasonFilter=e.target.value;updateTable();});
+  document.querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{
+    const k=th.dataset.key;
+    if(sortKey===k)sortDir=sortDir==='asc'?'desc':'asc';else{sortKey=k;sortDir='asc';}
+    renderDetails(ct);
+  }));
+  updateTable();
+}
+
+function sortArrow(k){return sortKey===k?`<span class="arrow">${sortDir==='asc'?'▲':'▼'}</span>`:'';}
+
+function filteredRows(){
+  const q=search.trim().toLowerCase();
+  let rows=allRows.filter(r=>
+    (statusFilter==='All'||r.status===statusFilter)&&
+    (reasonFilter==='All'||r.reason===reasonFilter)&&
+    (!q||String(r.order).toLowerCase().includes(q)||(r.reason||'').toLowerCase().includes(q)||(r.status||'').toLowerCase().includes(q))
+  );
+  const dir=sortDir==='asc'?1:-1;
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(sortKey==='amount'){av=a.amount;bv=b.amount;}
+    else if(sortKey==='order'){av=parseFloat(a.order)||0;bv=parseFloat(b.order)||0;}
+    else{av=(a[sortKey]||'').toLowerCase();bv=(b[sortKey]||'').toLowerCase();}
+    if(av<bv)return-1*dir;if(av>bv)return 1*dir;return 0;
+  });
+  return rows;
+}
+
+function updateTable(){
+  const rows=filteredRows();
+  const body=document.getElementById('detailBody');
+  if(!body)return;
+  body.innerHTML=rows.length?rows.map(r=>`<tr>
+    <td>${statusPill(r)}</td>
+    <td class="num">${r.order||'—'}</td>
+    <td class="num">${fmtE(r.amount)}</td>
+    <td>${r.reason||'—'}</td>
+  </tr>`).join(''):'<tr><td colspan="4" class="empty-state">No chargebacks match your filters.</td></tr>';
+
+  const totAmt=rows.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('rowCount').textContent=rows.length+' of '+allRows.length+' chargebacks';
+  document.getElementById('filteredTotals').innerHTML=`
+    <div class="metric"><div class="metric-label">Showing</div><div class="metric-value">${rows.length}</div><div class="metric-sub">of ${allRows.length} total</div></div>
+    <div class="metric"><div class="metric-label">Total chargeback amount</div><div class="metric-value info">${fmtE0(totAmt)}</div></div>`;
+}
+
+fetchAll();
+</script>
+</body>
+</html>
