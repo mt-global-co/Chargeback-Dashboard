@@ -220,6 +220,13 @@ function renderOverview(ct,{total,won,lost,review,resolved}){
   const wonAmt=allRows.filter(r=>r.cls==='won').reduce((s,r)=>s+r.amount,0);
   const lostAmt=allRows.filter(r=>r.cls==='lost').reduce((s,r)=>s+r.amount,0);
 
+  // Reasons ranked highest → lowest by number of chargebacks
+  const rstat={};
+  allRows.forEach(r=>{const k=r.reason||'Unknown';(rstat[k]=rstat[k]||{n:0,val:0}),rstat[k].n++,rstat[k].val+=r.amount;});
+  const reasonRank=Object.entries(rstat).map(([reason,s])=>({reason,n:s.n,val:s.val,pct:total?s.n/total*100:0}))
+    .sort((a,b)=>b.n-a.n||b.val-a.val);
+  const reasonMax=reasonRank.length?reasonRank[0].n:0;
+
   const sec=document.createElement('div');sec.className='section';
   sec.innerHTML=`
     <div class="highlights">
@@ -260,7 +267,19 @@ function renderOverview(ct,{total,won,lost,review,resolved}){
         <div class="section-title" style="margin-bottom:10px">Chargebacks by reason</div>
         <div style="position:relative;height:240px"><canvas id="reasonChart"></canvas></div>
       </div>
-    </div>`;
+    </div>
+
+    <div class="section-title">Top chargeback reasons (highest → lowest)</div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Reason for Chargeback</th><th class="num">Chargebacks</th><th>Share</th><th class="num">Total value</th></tr></thead>
+      <tbody>${reasonRank.map((r,i)=>`<tr>
+        <td style="color:var(--text3)">${i+1}</td>
+        <td style="font-weight:500">${r.reason}</td>
+        <td class="num">${r.n}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div style="height:6px;border-radius:3px;background:${C.review};width:${reasonMax?Math.round(r.n/reasonMax*90):0}px"></div>${r.pct.toFixed(1)}%</div></td>
+        <td class="num">${fmtE0(r.val)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
   ct.appendChild(sec);
 
   setTimeout(()=>{
