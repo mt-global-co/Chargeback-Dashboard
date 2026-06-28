@@ -119,6 +119,10 @@ const DATA_URL='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=
 
 const C={won:'#1D9E75',lost:'#E24B4A',review:'#BA7517',other:'#888780'};
 
+// Standard chargeback reasons (Shopify / card-network dispute categories).
+// The dropdown always lists all of these, plus any extra reason found in the sheet.
+const REASON_MASTER=['Fraudulent','Unrecognized','Duplicate','Credit not processed','Product not received','Product unacceptable','Subscription canceled','Bank cannot process','Debit not authorized','General'];
+
 let allRows=[],CHARTS={},activeTab='overview';
 let search='',statusFilter='All',reasonFilter='All',sortKey='order',sortDir='asc';
 
@@ -301,7 +305,10 @@ function statusPill(r){
 
 function renderDetails(ct){
   const statuses=Array.from(new Set(allRows.map(r=>r.status).filter(Boolean)));
-  const reasons=Array.from(new Set(allRows.map(r=>r.reason).filter(Boolean)));
+  // All standard reasons, plus any reason present in the sheet that isn't already listed.
+  const dataReasons=Array.from(new Set(allRows.map(r=>r.reason).filter(Boolean)));
+  const extras=dataReasons.filter(r=>!REASON_MASTER.some(m=>m.toLowerCase()===r.toLowerCase()));
+  const reasons=[...REASON_MASTER,...extras];
 
   const sec=document.createElement('div');sec.className='section';
   sec.innerHTML=`
