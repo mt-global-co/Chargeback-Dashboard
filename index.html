@@ -98,6 +98,7 @@ tr:hover td{background:var(--bg2)}
 <div class="tabs" id="tabs" style="display:none">
   <button class="tab active" data-tab="overview" onclick="setTab('overview')">Overview</button>
   <button class="tab" data-tab="details" onclick="setTab('details')">Chargeback Details</button>
+  <button class="tab" data-tab="rdr" onclick="setTab('rdr')">RDR</button>
   <span class="last-updated" id="last-updated"></span>
 </div>
 
@@ -113,6 +114,7 @@ tr:hover td{background:var(--bg2)}
 <script>
 const SHEET_ID='1TuMaYXN1aJnW5Ms2ioHj1AqHOV7Uy8OGZ4TiP_CZgQE';
 const DATA_URL='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv';
+const RDR_URL='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&sheet=RDR';
 
 const C={won:'#1D9E75',lost:'#E24B4A',review:'#BA7517',other:'#888780'};
 
@@ -120,8 +122,9 @@ const C={won:'#1D9E75',lost:'#E24B4A',review:'#BA7517',other:'#888780'};
 // The dropdown always lists all of these, plus any extra reason found in the sheet.
 const REASON_MASTER=['Product unacceptable','Credit not processed','Product not received','Not as described','Fraudulent','Damaged / Defective','Non-Receipt'];
 
-let allRows=[],CHARTS={},activeTab='overview';
+let allRows=[],allRDR=[],CHARTS={},activeTab='overview';
 let search='',statusFilter='All',reasonFilter='All',sortKey='order',sortDir='asc';
+let rdrSearch='',rdrSortKey='order',rdrSortDir='asc';
 
 async function fetchAll(){
   const btn=document.getElementById('refresh-btn');
@@ -129,8 +132,13 @@ async function fetchAll(){
   document.getElementById('content').innerHTML='<div class="loading-state"><div class="spinner"></div>Fetching live data from Google Sheets…</div>';
   document.getElementById('tabs').style.display='none';
   try{
-    const csv=await fetch(DATA_URL+'&t='+Date.now()).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();});
+    const ts='&t='+Date.now();
+    const [csv,rdrCsv]=await Promise.all([
+      fetch(DATA_URL+ts).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}),
+      fetch(RDR_URL+ts).then(r=>r.ok?r.text():'').catch(()=>'')
+    ]);
     allRows=parseRows(csv);
+    allRDR=parseRows(rdrCsv);
     document.getElementById('last-updated').textContent='Updated '+new Date().toLocaleTimeString();
     document.getElementById('tabs').style.display='flex';
     render();
@@ -155,6 +163,7 @@ function classify(status){
   if(s.includes('won'))return'won';
   if(s.includes('lost'))return'lost';
   if(s.includes('review'))return'review';
+  if(s.includes('resolved'))return'resolved';
   return'other';
 }
 
@@ -207,6 +216,7 @@ function render(){
   document.getElementById('period-label').textContent=
     total+' chargebacks · '+won+' won · '+lost+' lost · '+review+' in review';
   const ct=document.getElementById('content');ct.innerHTML='';
+  if(activeTab==='rdr'){renderRDR(ct);return;}
   if(!total){ct.innerHTML='<div class="empty-state">No chargeback rows found in the sheet.</div>';return;}
   if(activeTab==='overview')renderOverview(ct,{total,won,lost,review,resolved});
   else renderDetails(ct);
@@ -296,7 +306,7 @@ function renderOverview(ct,{total,won,lost,review,resolved}){
 
 // ── Details tab ────────────────────────────────────────────────────────────
 function statusPill(r){
-  const cls={won:'st-won',lost:'st-lost',review:'st-review',other:'st-other'}[r.cls];
+  const cls={won:'st-won',lost:'st-lost',review:'st-review',resolved:'st-won',other:'st-other'}[r.cls];
   return`<span class="status-pill ${cls}"><span class="dot"></span>${r.status||'—'}</span>`;
 }
 
@@ -382,6 +392,79 @@ function updateTable(){
   document.getElementById('filteredTotals').innerHTML=`
     <div class="metric"><div class="metric-label">Showing</div><div class="metric-value">${rows.length}</div><div class="metric-sub">of ${allRows.length} total</div></div>
     <div class="metric"><div class="metric-label">Total chargeback amount</div><div class="metric-value info">${fmtE0(totAmt)}</div></div>`;
+}
+
+// ── RDR tab (Rapid Dispute Resolution) ─────────────────────────────────────
+function rdrSortArrow(k){return rdrSortKey===k?`<span class="arrow">${rdrSortDir==='asc'?'▲':'▼'}</span>`:'';}
+
+function rdrFilteredRows(){
+  const q=rdrSearch.trim().toLowerCase();
+  let rows=allRDR.filter(r=>!q||String(r.order).toLowerCase().includes(q)||(r.reason||'').toLowerCase().includes(q)||(r.status||'').toLowerCase().includes(q));
+  const dir=rdrSortDir==='asc'?1:-1;
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(rdrSortKey==='amount'){av=a.amount;bv=b.amount;}
+    else if(rdrSortKey==='order'){av=parseFloat(a.order)||0;bv=parseFloat(b.order)||0;}
+    else{av=(a[rdrSortKey]||'').toLowerCase();bv=(b[rdrSortKey]||'').toLowerCase();}
+    if(av<bv)return-1*dir;if(av>bv)return 1*dir;return 0;
+  });
+  return rows;
+}
+
+function renderRDR(ct){
+  const n=allRDR.length;
+  const totAmt=allRDR.reduce((s,r)=>s+r.amount,0);
+  const avg=n?totAmt/n:0;
+  const high=allRDR.reduce((m,r)=>Math.max(m,r.amount),0);
+
+  const sec=document.createElement('div');sec.className='section';
+  if(!n){
+    sec.innerHTML='<div class="empty-state">No RDR rows found. Make sure the sheet tab is named “RDR” and shared as “Anyone with the link can view”.</div>';
+    ct.appendChild(sec);return;
+  }
+  sec.innerHTML=`
+    <div class="highlights">
+      <div class="highlight-card hl-won"><div class="hl-icon">✅</div><div class="hl-label">RDR resolved</div><div class="hl-name">${n}</div><div class="hl-stat">Rapid Dispute Resolution cases</div></div>
+      <div class="highlight-card hl-amount"><div class="hl-icon">💶</div><div class="hl-label">Total RDR value</div><div class="hl-name">${fmtE0(totAmt)}</div><div class="hl-stat">across ${n} cases</div></div>
+      <div class="highlight-card hl-review"><div class="hl-icon">📊</div><div class="hl-label">Average per case</div><div class="hl-name">${fmtE0(avg)}</div><div class="hl-stat">highest ${fmtE0(high)}</div></div>
+    </div>
+
+    <div class="section-title">RDR cases</div>
+    <div class="toolbar">
+      <input class="search-input" id="rdrSearch" type="text" placeholder="Search order # or reason…" value="${rdrSearch.replace(/"/g,'&quot;')}">
+      <span class="row-count" id="rdrRowCount"></span>
+    </div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr>
+        <th class="sortable" data-key="status">Status${rdrSortArrow('status')}</th>
+        <th class="sortable num" data-key="order">Order #${rdrSortArrow('order')}</th>
+        <th class="sortable num" data-key="amount">Total Chargeback${rdrSortArrow('amount')}</th>
+        <th class="sortable" data-key="reason">Reason for Chargeback${rdrSortArrow('reason')}</th>
+      </tr></thead>
+      <tbody id="rdrBody"></tbody>
+    </table></div></div>`;
+  ct.appendChild(sec);
+
+  document.getElementById('rdrSearch').addEventListener('input',e=>{rdrSearch=e.target.value;updateRDRTable();});
+  sec.querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{
+    const k=th.dataset.key;
+    if(rdrSortKey===k)rdrSortDir=rdrSortDir==='asc'?'desc':'asc';else{rdrSortKey=k;rdrSortDir='asc';}
+    renderRDR((ct.innerHTML='',ct));
+  }));
+  updateRDRTable();
+}
+
+function updateRDRTable(){
+  const rows=rdrFilteredRows();
+  const body=document.getElementById('rdrBody');
+  if(!body)return;
+  body.innerHTML=rows.length?rows.map(r=>`<tr>
+    <td>${statusPill(r)}</td>
+    <td class="num">${r.order||'—'}</td>
+    <td class="num">${fmtE(r.amount)}</td>
+    <td>${r.reason||'—'}</td>
+  </tr>`).join(''):'<tr><td colspan="4" class="empty-state">No RDR cases match your search.</td></tr>';
+  document.getElementById('rdrRowCount').textContent=rows.length+' of '+allRDR.length+' RDR cases';
 }
 
 fetchAll();
